@@ -1,0 +1,5 @@
+pyTelegramBotAPI==3.8.3
+cv2
+dlib
+imutils
+numpy
