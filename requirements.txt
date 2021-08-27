@@ -1,5 +1,5 @@
 pyTelegramBotAPI==3.8.3
-cv2
+opencv-python
 dlib
 imutils
 numpy
