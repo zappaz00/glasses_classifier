@@ -9,7 +9,7 @@ import telebot
 from random import randint
 from math import acos, degrees
 
-# path_to_glasses = "./glasses/"
+path_to_glasses = "./glasses/"
 # path_to_images = "./Humans/"
 # path_to_images = "./selfies/"
 # images = glob.glob(path_to_images + "/*")
@@ -213,8 +213,8 @@ def process_image(image):
     glasses_ctr = randint(0, len(glasses_paths) - 1)
     glasses_image = cv2.imread(glasses_paths[glasses_ctr], -1)
     img_with_glasses = put_on_glasses(shape, img_tmp, glasses_image)
-    cv2.putText(img_with_glasses, shape_text, (int(img_with_glasses.shape[0] * 0.1), int(img_with_glasses.shape[1] * 0.1)),
-                0, 1, (0, 0, 0))
+    # cv2.putText(img_with_glasses, shape_text, (int(img_with_glasses.shape[0] * 0.1), int(img_with_glasses.shape[1] * 0.1)),
+    #             0, 1, (0, 0, 0))
 
     return img_with_glasses
 
