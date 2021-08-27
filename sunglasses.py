@@ -4,6 +4,9 @@ import imutils
 from imutils import face_utils
 import numpy as np
 import glob
+import os
+import telebot
+from telebot import types
 
 path_to_glasses = "./glasses/"
 path_to_images = "./Humans/"
@@ -11,6 +14,21 @@ path_to_images = "./Humans/"
 images = glob.glob(path_to_images + "/*")
 faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+
+token = os.getenv("GLASSES_TOKEN")
+bot = telebot.TeleBot(token)
+
+
+def exception_catcher(base_function):
+    def new_function(*args,
+                     **kwargs):  # This allows you to decorate functions without worrying about what arguments they take
+        try:
+            return base_function(*args, **kwargs)  # base_function is whatever function this decorator is applied to
+        except Exception as e:
+            err_msg = base_function.__name__ + ' => ' + str(e)
+            print(err_msg)
+
+    return new_function
 
 
 def put_on_glasses(face_shape, face_img, glasses_img):
@@ -54,36 +72,30 @@ def put_on_glasses(face_shape, face_img, glasses_img):
     rows = min(face_img_cpy.shape[0] - start_y, rows)
     cols = min(face_img_cpy.shape[1] - start_x, cols)
 
-    alpha = 0.5
-    overlay = cv2.addWeighted(face_img_cpy[start_y:start_y + rows,
-                              start_x:start_x + cols, :],
-                              alpha, glasses_img_cpy[0:rows, 0:cols, :], 1.0-alpha, 0)
+    ret, mask = cv2.threshold(glasses_img_cpy[:, :, 3:], 200, 255, cv2.THRESH_BINARY)
+    mask_inv = cv2.bitwise_not(mask)
+
     face_img_cpy[start_y:start_y + rows,
-                 start_x:start_x + cols, :] = overlay
+                 start_x:start_x + cols, 0:3] = cv2.bitwise_and(face_img_cpy[start_y:start_y + rows,
+                                                                start_x:start_x + cols, 0:3], (255, 255, 255),
+                                                                mask=mask_inv)
+    return np.uint8(face_img_cpy)
 
-    return face_img_cpy
 
-
-img_ctr = 0
-for img_path in images:
-    image = cv2.imread(img_path)
-
+def process_image(image):
     max_len = 640
     scale_factor = max_len / max(image.shape)
 
-    image = imutils.resize(image, width=int(image.shape[0] * scale_factor),
-                           height=int(image.shape[1] * scale_factor))
+    if scale_factor > 1:
+        image = imutils.resize(image, width=int(image.shape[0] * scale_factor),
+                               height=int(image.shape[1] * scale_factor))
 
     img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = faceCascade.detectMultiScale(img_gray, scaleFactor=1.3, minNeighbors=3, minSize=(30, 30))
     print("Found {0} Faces!".format(len(faces)))
 
-    if img_ctr > 100:
-        break
-    img_ctr = img_ctr + 1
-
     if len(faces) == 0:
-        continue
+        return
 
     (x, y, w, h) = faces[0]
     found_rect = dlib.rectangle(x, y, x + w, y + h)
@@ -98,18 +110,19 @@ for img_path in images:
     top_point = np.resize(top_point, (1, 2))
     shape = np.append(shape, top_point, 0)
 
-    point_ctr = 0
-    for x, y in shape:
-        # cv2.circle(img_tmp, (x, y), 3, (0, 255, 0), -1)
-        cv2.putText(img_tmp, f'{point_ctr}', (x, y), 0, 0.25, (0, 255, 0))
-        point_ctr = point_ctr + 1
+    # point_ctr = 0
+    # for x, y in shape:
+    # cv2.circle(img_tmp, (x, y), 3, (0, 255, 0), -1)
+    # cv2.putText(img_tmp, f'{point_ctr}', (x, y), 0, 0.25, (0, 255, 0))
+    # point_ctr = point_ctr + 1
 
     # метрики
     face_height = np.linalg.norm(top_point - shape[8])
     face_width = np.linalg.norm(shape[0] - shape[16])
 
     face_length_ratio = face_height / face_width  # пропорции
-    face_chin_ratio = np.linalg.norm(shape[3] - shape[13]) / np.linalg.norm(shape[6] - shape[10])  # подбородок
+    face_chin_ratio = (np.linalg.norm(shape[4] - shape[8]) + np.linalg.norm(shape[12] - shape[8])) / np.linalg.norm(
+        shape[1] - shape[15])  # подбородок
     face_forehead_ratio = np.linalg.norm(shape[0] - shape[16]) / np.linalg.norm(shape[3] - shape[13])  # скулы
 
     print(f'face_length_ratio   = {face_length_ratio}')
@@ -119,7 +132,7 @@ for img_path in images:
     face_labels = {'square': 0, 'circle': 1, 'rectangle': 2, 'oval': 3, 'triangle': 4, 'heart': 5}
     face_metrics = [0, 0, 0, 0, 0, 0]
 
-    if face_length_ratio > 1.2:
+    if face_length_ratio > 1.1:
         face_metrics[face_labels['rectangle']] += 1
         face_metrics[face_labels['oval']] += 1
         face_metrics[face_labels['triangle']] += 1
@@ -128,14 +141,14 @@ for img_path in images:
         face_metrics[face_labels['square']] += 1
         face_metrics[face_labels['circle']] += 1
 
-    if face_chin_ratio > 1.3:
-        face_metrics[face_labels['rectangle']] += 1
-        face_metrics[face_labels['triangle']] += 1
-        face_metrics[face_labels['square']] += 1
-    else:
+    if face_chin_ratio > 1.1:
         face_metrics[face_labels['oval']] += 1
         face_metrics[face_labels['heart']] += 1
         face_metrics[face_labels['circle']] += 1
+    else:
+        face_metrics[face_labels['rectangle']] += 1
+        face_metrics[face_labels['triangle']] += 1
+        face_metrics[face_labels['square']] += 1
 
     if face_forehead_ratio > 1.15:
         face_metrics[face_labels['heart']] += 1
@@ -147,6 +160,7 @@ for img_path in images:
         face_metrics[face_labels['square']] += 1
 
     face_label = np.argmax(face_metrics)
+    shape_text = 'rectangle'
     for shape_text, label in face_labels.items():
         if label == face_label:
             print(shape_text)
@@ -156,10 +170,66 @@ for img_path in images:
     glasses_paths = glob.glob(path_to_glasses + shape_text + "/*")
 
     if len(glasses_paths) == 0:
-        continue
+        return
 
-    glasses_image = cv2.imread(glasses_paths[0])
+    glasses_image = cv2.imread(glasses_paths[0], -1)
     img_with_glasses = put_on_glasses(shape, img_tmp, glasses_image)
 
     cv2.imshow("face", img_with_glasses)
     cv2.waitKey(0)
+
+    return img_with_glasses
+
+
+@exception_catcher
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    bot.reply_to(message, f'Я твой личный помощник. Приятно познакомиться, {message.from_user.first_name}. '
+                          f'Для ознакомления с функционалом выполни /help')
+
+
+@exception_catcher
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    bot.reply_to(message, '/start - начать\n'
+                          '/send - отправить селфи')
+
+
+@exception_catcher
+@bot.message_handler(commands=['send'])
+def send_photo(message):
+    bot.register_next_step_handler(message, get_media_message)
+    bot.reply_to(message, 'Сделай селфи и старайся смотреть ровно в камеру :)')
+
+
+@exception_catcher
+@bot.message_handler(content_types=['photo'])
+def get_media_message(message):
+    if message.photo is None:
+        return
+
+    max_size_ctr = -1
+    max_size = 0
+    photo_ctr = 0
+    for photo_size in message.photo:
+        if photo_size.width * photo_size.height > max_size:
+            max_size = photo_size.width * photo_size.height
+            max_size_ctr = photo_ctr
+
+        photo_ctr += 1
+
+    if max_size_ctr < 0:
+        return
+
+    photo_size = message.photo[max_size_ctr]
+    file_info = bot.get_file(photo_size.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    photo = cv2.imdecode(np.frombuffer(downloaded_file, dtype=np.uint8), 1)
+    process_image(photo)
+
+    bot.reply_to(message, 'Photo processed')
+
+
+bot.polling(none_stop=True)
