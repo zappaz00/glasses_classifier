@@ -111,11 +111,6 @@ def process_image(image):
         return
 
     img_tmp = image.copy()
-    max_len = 640
-    scale_factor = max_len / max(image.shape)
-    img_tmp = imutils.resize(image, width=int(image.shape[0] * scale_factor),
-                             height=int(image.shape[1] * scale_factor))
-
     min_box_size = int(min(img_tmp.shape[0], img_tmp.shape[1]) * 0.3)
     img_gray = cv2.cvtColor(img_tmp, cv2.COLOR_BGR2GRAY)
     faces = faceCascade.detectMultiScale(img_gray, scaleFactor=1.05, minNeighbors=3, minSize=(min_box_size, min_box_size))
@@ -263,7 +258,12 @@ def get_media_message(message):
 bot.polling(none_stop=True)
 # images = glob.glob(path_to_images + "/*")
 # for image_path in images:
-#     result_image = process_image(cv2.imread(image_path))
+#     max_len = 640
+#     scale_factor = max_len / max(image.shape)
+#     face_image = cv2.imread(image_path)
+#     face_image = imutils.resize(face_image, width=int(image.shape[0] * scale_factor),
+#                                 height=int(image.shape[1] * scale_factor))
+#     result_image = process_image(face_image)
 #     if result_image is None:
 #         continue
 #
