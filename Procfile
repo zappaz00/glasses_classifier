@@ -1,1 +1,1 @@
-worker: python sunglasses.py
+worker: python sunglasses_bot.py

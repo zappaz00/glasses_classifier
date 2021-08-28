@@ -3,3 +3,4 @@ opencv-python-headless
 dlib
 imutils
 numpy
+googletrans==3.1.0a0

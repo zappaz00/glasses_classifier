@@ -4,33 +4,12 @@ import imutils
 from imutils import face_utils
 import numpy as np
 import glob
-import os
-import telebot
 from random import randint
 from math import acos, degrees
 
 path_to_glasses = "./glasses/"
-# path_to_images = "./Humans/"
-# path_to_images = "./selfies/"
-path_to_images = "./no_glasses/"
 faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
-
-token = os.getenv("GLASSES_TOKEN")
-bot = telebot.TeleBot(token)
-user_states = {}
-
-
-def exception_catcher(base_function):
-    def new_function(*args,
-                     **kwargs):  # This allows you to decorate functions without worrying about what arguments they take
-        try:
-            return base_function(*args, **kwargs)  # base_function is whatever function this decorator is applied to
-        except Exception as e:
-            err_msg = base_function.__name__ + ' => ' + str(e)
-            print(err_msg)
-
-    return new_function
 
 
 def image_resize(image, width=None, height=None):
@@ -192,80 +171,5 @@ def process_image(image):
     # cv2.putText(img_with_glasses, shape_text, (int(img_with_glasses.shape[0] * 0.1), int(img_with_glasses.shape[1] * 0.1)),
     #             0, 1, (0, 0, 0))
 
-    return img_with_glasses
+    return shape_text, img_with_glasses
 
-
-@exception_catcher
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.send_chat_action(message.chat.id, 'typing')
-    bot.reply_to(message, f'Я твой личный помощник. Приятно познакомиться, {message.from_user.first_name}. '
-                          f'Для ознакомления с функционалом выполни /help')
-
-
-@exception_catcher
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    bot.send_chat_action(message.chat.id, 'typing')
-    bot.reply_to(message, '/start - начать\n'
-                          '/send - отправить селфи')
-
-
-@exception_catcher
-@bot.message_handler(commands=['send'])
-def send_photo(message):
-    user_states[message.from_user.id] = 1
-    bot.register_next_step_handler(message, get_media_message)
-    bot.reply_to(message, 'Сделай селфи и старайся смотреть ровно в камеру :)')
-
-
-@exception_catcher
-@bot.message_handler(content_types=['photo'])
-def get_media_message(message):
-    if message.photo is None or user_states.get(message.from_user.id) != 1:
-        return
-
-    user_states.pop(message.from_user.id, None)
-    max_size_ctr = -1
-    max_size = 0
-    photo_ctr = 0
-    for photo_size in message.photo:
-        if photo_size.width * photo_size.height > max_size:
-            max_size = photo_size.width * photo_size.height
-            max_size_ctr = photo_ctr
-
-        photo_ctr += 1
-
-    if max_size_ctr < 0:
-        return
-
-    photo_size = message.photo[max_size_ctr]
-    file_info = bot.get_file(photo_size.file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    photo = cv2.imdecode(np.frombuffer(downloaded_file, dtype=np.uint8), 1)
-    result_image = process_image(photo)
-    if result_image is None:
-        return
-
-    result_image_str = cv2.imencode('.jpg', result_image)
-
-    bot.send_photo(chat_id=message.chat.id,
-                   photo=result_image_str[1].tobytes(),
-                   caption='Взгляни, что я тебе подобрал!',
-                   reply_to_message_id=message.id)
-
-
-bot.polling(none_stop=True)
-# images = glob.glob(path_to_images + "/*")
-# for image_path in images:
-#     max_len = 640
-#     scale_factor = max_len / max(image.shape)
-#     face_image = cv2.imread(image_path)
-#     face_image = imutils.resize(face_image, width=int(image.shape[0] * scale_factor),
-#                                 height=int(image.shape[1] * scale_factor))
-#     result_image = process_image(face_image)
-#     if result_image is None:
-#         continue
-#
-#     cv2.imshow("face", result_image)
-#     cv2.waitKey(0)
