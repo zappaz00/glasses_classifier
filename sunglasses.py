@@ -12,7 +12,7 @@ from math import acos, degrees
 path_to_glasses = "./glasses/"
 # path_to_images = "./Humans/"
 # path_to_images = "./selfies/"
-# images = glob.glob(path_to_images + "/*")
+path_to_images = "./no_glasses/"
 faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
@@ -34,27 +34,17 @@ def exception_catcher(base_function):
 
 
 def image_resize(image, width=None, height=None):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
     dim = None
     (h, w) = image.shape[:2]
 
-    # if both the width and height are None, then return the
-    # original image
     if width is None and height is None:
         return image
 
-    # check to see if the width is None
     if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
         r = height / float(h)
         dim = (int(w * r), height)
 
-    # otherwise, the height is None
     else:
-        # calculate the ratio of the width and construct the
-        # dimensions
         r = width / float(w)
         dim = (width, int(h * r))
 
@@ -63,10 +53,7 @@ def image_resize(image, width=None, height=None):
     else:
         inter = cv2.INTER_CUBIC
 
-    # resize the image
     resized = cv2.resize(image, dim, interpolation=inter)
-
-    # return the resized image
     return resized
 
 
@@ -154,10 +141,10 @@ def process_image(image):
     chin_b = np.linalg.norm(shape[4] - shape[6])
     chin_c = np.linalg.norm(shape[4] - shape[12])
     chin_angle = degrees(acos((-chin_a * chin_a + chin_b * chin_b + chin_c * chin_c) / (2.0 * chin_b * chin_c)))
+    chin_angle = max(min(chin_angle, 90), 0)
 
     face_length_ratio = face_height / face_width  # пропорции
-    # face_chin_ratio = jaw_length / np.linalg.norm(shape[1] - shape[15])  # подбородок
-    face_forehead_ratio = np.linalg.norm(shape[0] - shape[16]) / np.linalg.norm(shape[3] - shape[13])  # скулы
+    face_forehead_ratio = np.linalg.norm(shape[0] - shape[16]) / np.linalg.norm(shape[4] - shape[12])  # скулы
 
     print(f'face_length_ratio   = {face_length_ratio}')
     print(f'chin_angle          = {chin_angle}')
@@ -166,36 +153,30 @@ def process_image(image):
     face_labels = {'square': 0, 'circle': 1, 'rectangle': 2, 'oval': 3, 'triangle': 4, 'heart': 5}
     face_metrics = [0, 0, 0, 0, 0, 0]
 
-    face_length_ratio_thr = 1.1
+    face_length_ratio_thr = 1.26
     chin_angle_thr = 45
     face_forehead_ratio_thr = 1.2
 
-    if face_length_ratio > face_length_ratio_thr:
-        face_metrics[face_labels['rectangle']] += 1
-        face_metrics[face_labels['oval']] += 1
-        face_metrics[face_labels['triangle']] += 1
-        face_metrics[face_labels['heart']] += 1
-    else:
-        face_metrics[face_labels['square']] += 1
-        face_metrics[face_labels['circle']] += 1
+    face_metrics[face_labels['rectangle']] += face_length_ratio - face_length_ratio_thr
+    face_metrics[face_labels['oval']] += face_length_ratio - face_length_ratio_thr
+    face_metrics[face_labels['triangle']] += face_length_ratio - face_length_ratio_thr
+    face_metrics[face_labels['heart']] += face_length_ratio - face_length_ratio_thr
+    face_metrics[face_labels['square']] += face_length_ratio_thr - face_length_ratio
+    face_metrics[face_labels['circle']] += face_length_ratio_thr - face_length_ratio
 
-    if chin_angle > chin_angle_thr:
-        face_metrics[face_labels['oval']] += 1
-        face_metrics[face_labels['heart']] += 1
-        face_metrics[face_labels['circle']] += 1
-    else:
-        face_metrics[face_labels['rectangle']] += 1
-        face_metrics[face_labels['triangle']] += 1
-        face_metrics[face_labels['square']] += 1
+    face_metrics[face_labels['oval']] += (chin_angle - chin_angle_thr) / 90.0
+    face_metrics[face_labels['heart']] += (chin_angle - chin_angle_thr) / 90.0
+    face_metrics[face_labels['circle']] += (chin_angle - chin_angle_thr) / 90.0
+    face_metrics[face_labels['rectangle']] += (chin_angle_thr - chin_angle) / 90.0
+    face_metrics[face_labels['triangle']] += (chin_angle_thr - chin_angle) / 90.0
+    face_metrics[face_labels['square']] += (chin_angle_thr - chin_angle) / 90.0
 
-    if face_forehead_ratio > face_forehead_ratio_thr:
-        face_metrics[face_labels['heart']] += 1
-        face_metrics[face_labels['triangle']] += 1
-    else:
-        face_metrics[face_labels['oval']] += 1
-        face_metrics[face_labels['circle']] += 1
-        face_metrics[face_labels['rectangle']] += 1
-        face_metrics[face_labels['square']] += 1
+    face_metrics[face_labels['heart']] += face_forehead_ratio - face_forehead_ratio_thr
+    face_metrics[face_labels['triangle']] += face_forehead_ratio - face_forehead_ratio_thr
+    face_metrics[face_labels['oval']] += face_forehead_ratio_thr - face_forehead_ratio
+    face_metrics[face_labels['circle']] += face_forehead_ratio_thr - face_forehead_ratio
+    face_metrics[face_labels['rectangle']] += face_forehead_ratio_thr - face_forehead_ratio
+    face_metrics[face_labels['square']] += face_forehead_ratio_thr - face_forehead_ratio
 
     print(face_labels)
     print(face_metrics)
@@ -280,11 +261,11 @@ def get_media_message(message):
 
 
 bot.polling(none_stop=True)
-
+# images = glob.glob(path_to_images + "/*")
 # for image_path in images:
-    # result_image = process_image(cv2.imread(image_path))
-    # if result_image is None:
-    #         continue
-    #
-    # cv2.imshow("face", result_image)
-    # cv2.waitKey(0)
+#     result_image = process_image(cv2.imread(image_path))
+#     if result_image is None:
+#         continue
+#
+#     cv2.imshow("face", result_image)
+#     cv2.waitKey(0)
