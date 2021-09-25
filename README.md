@@ -28,3 +28,5 @@ and it's result:
 
 - Add new glasses
 - Make better face shape recognition
+
+https://core.telegram.org/bots/api
